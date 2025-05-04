@@ -24,7 +24,7 @@ jobs:
         
     - name: Clone godot-docs and godot-docs-l10n
       run: |
-        git clone -b 4.x https://github.com/godotengine/godot-docs.git
+        git clone -b stable https://github.com/godotengine/godot-docs.git
         git clone -b 4.x https://github.com/godotengine/godot-docs-l10n.git
         
     - name: Create necessary directories
