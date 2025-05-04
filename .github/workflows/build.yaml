@@ -1,0 +1,44 @@
+name: Build Godot Chinese Docs
+
+on:
+  workflow_dispatch:  # 允许手动触发
+  push:
+    branches: [ main ]  # 你可以根据需要修改触发分支
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+        
+    - name: Install dependencies
+      run: |
+        pip install sphinx sphinx-markdown-builder sphinx-intl
+        
+    - name: Clone godot-docs and godot-docs-l10n
+      run: |
+        git clone -b stable https://github.com/godotengine/godot-docs.git
+        git clone -b 4.x https://github.com/godotengine/godot-docs-l10n.git
+        
+    - name: Sync Chinese translations
+      run: |
+        rsync -a godot-docs-l10n/po/zh_CN/ godot-docs/po/zh_CN/
+        
+    - name: Build Markdown docs
+      run: |
+        cd godot-docs
+        sphinx-build -b markdown -D language=zh_CN . _build/markdown
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: godot-docs-zh_CN-markdown
+        path: godot-docs/_build/markdown
+        retention-days: 90  # 保留天数，可根据需要调整
