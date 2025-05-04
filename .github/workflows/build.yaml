@@ -3,7 +3,7 @@ name: Build Godot Chinese Docs
 on:
   workflow_dispatch:  # 允许手动触发
   push:
-    branches: [ main ]  # 你可以根据需要修改触发分支
+    branches: [ master ]  # 你可以根据需要修改触发分支
 
 jobs:
   build-docs:
@@ -37,7 +37,7 @@ jobs:
         sphinx-build -b markdown -D language=zh_CN . _build/markdown
         
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: godot-docs-zh_CN-markdown
         path: godot-docs/_build/markdown
