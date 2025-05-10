@@ -8,6 +8,8 @@ on:
       - 'godot/doc/classes/**'  # 只有XML文件变化时才触发
       - 'main.py'  # 或者您的脚本路径
       - '.github/workflows/build.yaml'  # 或者您的工作流文件路径
+  schedule:
+    - cron: '0 0 1 * *'  # 每月1号零点触发
 
 jobs:
   convert-docs:
@@ -37,9 +39,27 @@ jobs:
         source .venv/bin/activate
         uv run main.py
 
-    - name: Archive output
-      uses: actions/upload-artifact@v4
+    - name: Generate directory structure
+      run: |
+        cd translated_markdown
+        tree -a > contents.txt
+        echo "Generated at $(date)" >> contents.txt
+        cd ..
+
+    - name: Create ZIP archive
+      run: |
+        current_datetime=$(date +"%Y%m%d_%H%M%S")
+        zip_filename="${GITHUB_REPOSITORY#*/}_docs_${current_datetime}.zip"
+        zip -r "${zip_filename}" translated_markdown/
+        echo "ZIP_FILENAME=${zip_filename}" >> $GITHUB_ENV
+        echo "RELEASE_TAG=${current_datetime}" >> $GITHUB_ENV
+        echo "RELEASE_NAME=${GITHUB_REPOSITORY#*/} Docs ${current_datetime}" >> $GITHUB_ENV
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: godot-docs-markdown
-        path: translated_markdown/
-        retention-days: 90  # 保留90天
+        tag_name: "${{ env.RELEASE_TAG }}"
+        name: "${{ env.RELEASE_NAME }}"
+        body: "Automatically generated Godot documentation export"
+        files: |
+          ${{ env.ZIP_FILENAME }}

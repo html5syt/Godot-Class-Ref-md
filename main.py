@@ -12,7 +12,7 @@ class XMLToMarkdownTranslator:
     # 可配置参数
     SKIP_FILES = {}  # 跳过文件列表
     SIMILARITY_THRESHOLD = 0.7  # 相似度匹配阈值
-    DOCS_URL = "https://docs.godotengine.org/en/stable"  # 文档链接前缀
+    DOCS_URL = "https://docs.godotengine.org/zh-cn/4.x"  # 文档链接前缀
     LOCALIZED_STRINGS = {
         "class_header": "# {class_name}\n",
         "inherits_from": "*继承自: {inherits}*  \n{emoji}**注意**: 可能在未来的版本中删除或发生变化。\n",

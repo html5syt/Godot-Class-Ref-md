@@ -13,4 +13,4 @@ You can replace the po file with your own translations or download from weblate.
 
 And then change the `translator ="godot-engine-godot-class-reference-zh_Hans.po"` in the `main.py` file to your own po file path.
 
-Then translate the `LOCALIZED_STRINGS` in `main.py` file to your own language.
+Then translate the `LOCALIZED_STRINGS` and `DOCS_URL` in `main.py` file to your own language.
