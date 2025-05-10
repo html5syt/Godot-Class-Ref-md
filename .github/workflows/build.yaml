@@ -7,6 +7,7 @@ on:
     paths:
       - 'godot/doc/classes/**'  # 只有XML文件变化时才触发
       - 'main.py'  # 或者您的脚本路径
+      - '.github/workflows/build.yaml'  # 或者您的工作流文件路径
 
 jobs:
   convert-docs:
@@ -16,6 +17,11 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
+
+    - name: Get submodules
+      run: |
+        git submodule init
+        git submodule update
 
     - name: Set up Python
       uses: actions/setup-python@v5
