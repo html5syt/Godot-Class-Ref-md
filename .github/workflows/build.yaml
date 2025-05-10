@@ -1,53 +1,44 @@
-name: Build Godot Chinese Docs
+name: Convert Godot XML to Markdown
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 允许手动触发
   push:
-    branches: [ master ]
+    branches: [ master ]  # 主分支推送时触发
+    paths:
+      - 'godot/doc/classes/**'  # 只有XML文件变化时才触发
+      - 'main.py'  # 或者您的脚本路径
 
 jobs:
-  build-docs:
+  convert-docs:
     runs-on: ubuntu-latest
-    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
       with:
-        python-version: '3.x'
-        
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'  # 使用您需要的Python版本
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
     - name: Install dependencies
       run: |
-        pip install sphinx sphinx-markdown-builder sphinx-intl
-        
-    - name: Clone godot-docs and godot-docs-l10n
+        uv venv
+
+    - name: Run conversion script
       run: |
-        git clone -b stable https://github.com/godotengine/godot-docs.git
-        git clone -b 4.x https://github.com/godotengine/godot-docs-l10n.git
-        
-    - name: Create necessary directories
-      run: |
-        mkdir -p godot-docs/po/zh_CN
-        
-    - name: Sync Chinese translations
-      run: |
-        if [ -d "godot-docs-l10n/po/zh_CN" ]; then
-          rsync -a godot-docs-l10n/po/zh_CN/ godot-docs/po/zh_CN/
-        else
-          echo "Warning: zh_CN directory not found in godot-docs-l10n"
-          exit 1
-        fi
-        
-    - name: Build Markdown docs
-      run: |
-        cd godot-docs
-        sphinx-build -b markdown -D language=zh_CN . _build/markdown
-        
-    - name: Upload artifact
+        source .venv/bin/activate
+        uv run main.py
+
+    - name: Archive output
       uses: actions/upload-artifact@v4
       with:
-        name: godot-docs-zh_CN-markdown
-        path: godot-docs/_build/markdown
-        retention-days: 90
+        name: godot-docs-markdown
+        path: translated_docs/
+        retention-days: 90  # 保留90天

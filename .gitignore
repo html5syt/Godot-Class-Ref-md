@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+.obsidian/
+translation_dict.tsv
+translation_dict.txt
+translated_markdown/

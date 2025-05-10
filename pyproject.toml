@@ -1,11 +1,9 @@
 [project]
-name = "114514"
+name = "Godot-class-refences-md"
 version = "0.1.0"
-description = "Add your description here"
+description = "A tool to generate markdown files of class references for Godot Engine 4.x"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "sphinx>=8.3.0",
-    "sphinx-intl>=2.3.1",
-    "sphinx-markdown-builder>=0.6.8",
+    "polib>=1.2.0",
 ]
