@@ -6,6 +6,9 @@ This is a tool to generate markdown files for the Godot Engine Class Reference. 
 2. Install `uv`.
 3. run `uv run main.py` in the terminal.
 
+OR fork this repository and use Github Actions to build :)
+(because it may take about 4 hours to complete the task.)
+
 ## PO file
 The PO file is used to translate the markdown files into different languages. 
 
@@ -13,7 +16,7 @@ You can replace the po file with your own translations or download from weblate.
 
 And then change the `translator ="godot-engine-godot-class-reference-zh_Hans.po"` in the `main.py` file to your own po file path.
 
-Then translate the `LOCALIZED_STRINGS` and `DOCS_URL` in `main.py` file to your own language.
+Then translate and edit the `LOCALIZED_STRINGS` and `DOCS_URL` in `main.py` file to your own language.
 
 ## Konwn issues
 1. The tool maybe output some not-translated strings in the markdown files. You can translate them by yourself or change the `SIMILARITY_THRESHOLD` in `main.py` to a smaller value to make the tool more accurate.
