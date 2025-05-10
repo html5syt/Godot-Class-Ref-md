@@ -41,5 +41,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: godot-docs-markdown
-        path: translated_docs/
+        path: translated_markdown/
         retention-days: 90  # 保留90天
