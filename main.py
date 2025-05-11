@@ -209,8 +209,8 @@ class XMLToMarkdownTranslator:
                 best_match = trans
 
         if best_match and best_ratio >= threshold:
-            # 红色警告输出
-            print(f"\033[91m警告: 使用相似度匹配 ({best_ratio * 100:.1f}%)\033[0m")
+            # 黄色警告输出
+            print(f"\033[93m警告: 使用相似度匹配 ({best_ratio * 100:.1f}%)\033[0m")
             print(f"原文: {text[:100]}...")
             print(f"匹配: {best_match[:100]}...\n")
             # 保留原始格式
@@ -222,6 +222,7 @@ class XMLToMarkdownTranslator:
             return result
 
         # 4. 无法匹配则保留原文（仍转换BBCode）
+        print(f"\033[91m错误: 无法翻译 {text[:100]}...\033[0m")
         return self._convert_bbcode_to_markdown(text)
 
     def _get_deprecation_notice(self, elem: ET.Element) -> Optional[str]:
