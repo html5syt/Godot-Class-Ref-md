@@ -21,3 +21,4 @@ Then translate and edit the `LOCALIZED_STRINGS` and `DOCS_URL` in `main.py` file
 ## Konwn issues
 1. The tool maybe output some not-translated strings in the markdown files. You can translate them by yourself or change the `SIMILARITY_THRESHOLD` in `main.py` to a smaller value to make the tool more accurate.
 2. The codeblocks in the markdown files may not be correctly formatted. They lose the tab indents because some BUGs. You can use a code formatter like Prettier in your code editor or AI tools to format them.
+3. If you see some other wrong in markdown files, you can modify by yourself or report an issue to me.

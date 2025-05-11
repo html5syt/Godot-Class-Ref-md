@@ -3,19 +3,20 @@ import xml.etree.ElementTree as ET
 import polib
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional
 import concurrent.futures
 import shutil
 
 
 class XMLToMarkdownTranslator:
     # 可配置参数
-    SKIP_FILES = {}  # 跳过文件列表
+    SKIP_FILES = {"Node.xml","Object.xml"}  # 跳过文件列表
     SIMILARITY_THRESHOLD = 0.7  # 相似度匹配阈值
     DOCS_URL = "https://docs.godotengine.org/zh-cn/4.x"  # 文档链接前缀
     LOCALIZED_STRINGS = {
         "class_header": "# {class_name}\n",
-        "inherits_from": "*继承自: {inherits}*  \n{emoji}**注意**: 可能在未来的版本中删除或发生变化。\n",
+        "inherits_from": "*继承自: {inherits}*  \n{emoji}**注意**: 可能在未来的版本中删除或发生变化。\n详细信息：{info}  \n",
+        "inherits_from_2": "> *继承自: [{inherits}]({rel_path})*\n\n",
         "version": "*版本: {version}*  \n",
         "brief_description": "\n## 简要描述\n\n{content}\n",
         "description": "\n## 详细描述\n\n{content}\n",
@@ -278,8 +279,17 @@ class XMLToMarkdownTranslator:
                 if root.get("experimental")
                 else ""
             )
+            info = (
+                root.get("deprecated")
+                if emoji == "⚠️"
+                else root.get("experimental")
+                if emoji == "🔬"
+                else "None"
+            )
             md_lines.append(
-                self._localize("inherits_from", inherits=inherits, emoji=emoji)
+                self._localize(
+                    "inherits_from", inherits=inherits, emoji=emoji, info=info
+                )
             )
 
         # 3. 版本信息
@@ -314,7 +324,12 @@ class XMLToMarkdownTranslator:
                 type_ = member.get("type", "")
                 desc = self._translate_text(member.text if member.text else "")
 
-                row = self._localize("member_row", name=name, type_=type_, desc=desc)
+                row = self._localize(
+                    "member_row",
+                    name=name.replace("\n", "").replace("\r", ""),
+                    type_=type_.replace("\n", "").replace("\r", ""),
+                    desc=desc.replace("\n", "").replace("\r", ""),
+                )
                 if notice := self._get_deprecation_notice(member):
                     row += self._localize("deprecation_notice", notice=notice)
                 md_lines.append(row + " |")
@@ -422,23 +437,32 @@ class XMLToMarkdownTranslator:
                     target_dir = output_dir / "/".join(reversed(inheritance_chain))
                     target_dir.mkdir(parents=True, exist_ok=True)
 
-            # 添加父类链接到文件第二行
-            if inherits:
-                with open(md_file, "r+", encoding="utf-8") as f:
-                    content = f.readlines()
-                    # 确保有至少一行（标题）
-                    if len(content) > 0:
-                        # 在标题后插入父类链接
-                        rel_path = f"{inherits}.md"
-                        if inherits in self.class_hierarchy:
+                # 添加父类链接到文件第二行
+                if inherits:
+                    with open(md_file, "r+", encoding="utf-8") as f:
+                        content = f.readlines()
+                        # 确保有至少一行（标题）
+                        if len(content) > 0:
                             # 计算相对路径
-                            # depth = len(inheritance_chain) if inheritance_chain else 0
-                            rel_path = "../" + f"{inherits}.md"
-                        parent_link = f"\n> 父类: [{inherits}]({rel_path})\n"
-                        content.insert(1, parent_link)
-                        f.seek(0)
-                        f.writelines(content)
-                        f.truncate()
+                            rel_path = f"{inherits}.md"
+                            if inherits in self.class_hierarchy:
+                                rel_path = "../" + f"{inherits}.md"
+
+                            # 构建父类链接行
+                            parent_link = self._localize(
+                                "inherits_from_2", rel_path=rel_path, inherits=inherits
+                            )
+
+                            # 覆写第二+1行（如果内容少于2行则追加）
+                            if len(content) >= 2:
+                                content[2] = parent_link
+                            else:
+                                content.append(parent_link)
+
+                            # 回写文件
+                            f.seek(0)
+                            f.writelines(content)
+                            f.truncate()
 
             shutil.move(str(md_file), str(target_dir / md_file.name))
 
@@ -456,7 +480,7 @@ class XMLToMarkdownTranslator:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = []
             for xml_file in sorted(xml_dir.glob("*.xml")):
-                if xml_file.name in self.SKIP_FILES:
+                if xml_file.name not in self.SKIP_FILES:
                     print(
                         self._localize("warning", message=f"跳过文件: {xml_file.name}")
                     )
