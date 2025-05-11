@@ -10,7 +10,7 @@ import shutil
 
 class XMLToMarkdownTranslator:
     # 可配置参数
-    SKIP_FILES = {"Node.xml","Object.xml"}  # 跳过文件列表
+    SKIP_FILES = {}  # 跳过文件列表
     SIMILARITY_THRESHOLD = 0.7  # 相似度匹配阈值
     DOCS_URL = "https://docs.godotengine.org/zh-cn/4.x"  # 文档链接前缀
     LOCALIZED_STRINGS = {
@@ -480,7 +480,7 @@ class XMLToMarkdownTranslator:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = []
             for xml_file in sorted(xml_dir.glob("*.xml")):
-                if xml_file.name not in self.SKIP_FILES:
+                if xml_file.name in self.SKIP_FILES:
                     print(
                         self._localize("warning", message=f"跳过文件: {xml_file.name}")
                     )
