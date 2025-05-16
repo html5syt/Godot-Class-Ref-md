@@ -40,7 +40,7 @@ jobs:
     - name: Run conversion script
       run: |
         source .venv/bin/activate
-        uv run main.py -L ${{ env.RELEASE_TAG }}
+        uv run main.py -L ${{ env.LANG }}
 
     - name: Generate directory structure
       run: |
