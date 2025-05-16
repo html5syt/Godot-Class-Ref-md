@@ -5,5 +5,8 @@ description = "A tool to generate markdown files of class references for Godot E
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "bs4>=0.0.2",
     "polib>=1.2.0",
+    "rapidfuzz>=3.13.0",
+    "requests>=2.32.3",
 ]

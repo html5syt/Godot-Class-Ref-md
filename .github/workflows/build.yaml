@@ -11,6 +11,9 @@ on:
   schedule:
     - cron: '0 0 1 * *'  # 每月1号零点触发
 
+env:
+  LANG: zh_Hans
+
 jobs:
   convert-docs:
     runs-on: ubuntu-latest
@@ -37,7 +40,7 @@ jobs:
     - name: Run conversion script
       run: |
         source .venv/bin/activate
-        uv run main.py
+        uv run main.py -L ${{ env.RELEASE_TAG }}
 
     - name: Generate directory structure
       run: |

@@ -1,4 +1,3 @@
-from difflib import SequenceMatcher
 import xml.etree.ElementTree as ET
 import polib
 import re
@@ -6,6 +5,16 @@ from pathlib import Path
 from typing import Dict, Optional
 import concurrent.futures
 import shutil
+import requests
+from rapidfuzz import fuzz, utils as fuzzy_utils
+from bs4 import BeautifulSoup  # 用于处理HTML标签转义
+import argparse
+
+
+try:
+    import torch  # 用于GPU加速
+except ImportError:
+    print("\033[93mtorch库未安装，无法使用GPU加速。使用CPU进行处理。\033[0m")
 
 
 class XMLToMarkdownTranslator:
@@ -25,7 +34,7 @@ class XMLToMarkdownTranslator:
         "members": "\n## 成员变量\n",
         "members_table": "| 名称 | 类型 | 描述 |\n|------|------|------|",
         "member_row": "| `{name}` | `{type_}` | {desc}",
-        "deprecation_notice": "  \n**注意**: {notice}",
+        "deprecation_notice": "  **注意**: {notice}",
         "methods": "\n## 方法\n",
         "method_header": "### {name}()",
         "return_type": "*返回类型: `{type_}`*",
@@ -41,11 +50,39 @@ class XMLToMarkdownTranslator:
         "error": "\033[91m{message}\033[0m",  # 红色错误
     }
 
-    def __init__(self, po_file_path: str):
-        self.po = polib.pofile(po_file_path)
-        self.translation_dict = self._build_translation_dict()
-        self.class_hierarchy = {}  # 用于存储类继承关系
-        self.processed_files = set()  # 已处理文件集合
+    def __init__(
+        self, po_file_path: Optional[str] = None, lang_code: Optional[str] = None
+    ):
+        if po_file_path is None and lang_code is not None:
+            po_file_path = self.download_po_file(lang_code)
+
+        if po_file_path:
+            self.po = polib.pofile(po_file_path)
+            self.translation_dict = self._build_translation_dict()
+        else:
+            self.translation_dict = {}
+
+        self.class_hierarchy = {}
+        self.processed_files = set()
+        try:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        except:
+            pass
+
+    def download_po_file(self, lang_code: str) -> str:
+        """从Weblate下载PO文件"""
+        url = f"https://hosted.weblate.org/download/godot-engine/godot-class-reference/{lang_code}/"
+        local_path = f"godot-engine-godot-class-reference-{lang_code}.po"
+
+        print(f"正在下载翻译文件: {url}")
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+
+        with open(local_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        return local_path
 
     def _build_translation_dict(self) -> Dict[str, str]:
         """构建翻译字典，保留原始换行和格式"""
@@ -67,17 +104,15 @@ class XMLToMarkdownTranslator:
             return self.LOCALIZED_STRINGS[key]
 
     def _convert_bbcode_to_markdown(self, text: str) -> str:
-        """精确转换BBCode到Markdown"""
+        """转换BBCode并保留代码缩进"""
         if not text:
             return text
 
-        # 保留原始换行，仅去除行首缩进
-        text = "\n".join(line.lstrip() for line in text.split("\n"))
-
-        # 1. 处理代码块（保留内部格式）
+        # 先处理代码块以保留缩进
         def handle_codeblock(match):
             lang = match.group(1) or "gdscript"
             content = match.group(2)
+            # 保留原始缩进
             return f"```{lang}\n{content}\n```"
 
         text = re.sub(
@@ -144,86 +179,41 @@ class XMLToMarkdownTranslator:
             .replace("$DOCS_URL", self.DOCS_URL)
         )  # 修复格式
 
+        # 转义HTML标签
+        text = BeautifulSoup(text, "html.parser").text
+        text = text.replace("<", "[").replace(">", "]")
+
         return text
 
     def _translate_text(self, text: str) -> str:
-        """翻译文本并保留格式，改进匹配算法"""
-        if not text:
-            return text
+        """翻译文本，使用更快的相似度算法"""
+        if not text or not self.translation_dict:
+            return self._convert_bbcode_to_markdown(text)
 
-        def normalize_for_matching(content: str) -> str:
-            """标准化文本用于匹配：移除代码块、BBCode标签和多余空白"""
-            if not content:
-                return content
-
-            # 移除代码块内容
-            content = re.sub(
-                r"\[codeblock\].*?\[/codeblock\]", "", content, flags=re.DOTALL
-            )
-            content = re.sub(
-                r"\[codeblocks\].*?\[/codeblocks\]", "", content, flags=re.DOTALL
-            )
-            content = re.sub(r"\[code\].*?\[/code\]", "", content)
-
-            # 移除所有BBCode标签
-            content = re.sub(r"\[/?[a-z]+\]", "", content)
-
-            # 标准化空白（保留单个空格）
-            content = " ".join(content.split())
-            return content.strip()
-
-        # 1. 尝试完全匹配原始文本
-        if text in self.translation_dict:
-            return self._convert_bbcode_to_markdown(self.translation_dict[text])
-
-        # 2. 尝试标准化后匹配
-        normalized_text = normalize_for_matching(text)
-        normalized_dict = {
-            normalize_for_matching(k): v for k, v in self.translation_dict.items()
-        }
-
-        if normalized_text in normalized_dict:
-            translated = normalized_dict[normalized_text]
-            # 保留原始换行结构
-            result = self._convert_bbcode_to_markdown(translated)
-            if text.startswith("\n"):
-                result = "\n" + result
-            if text.endswith("\n"):
-                result = result + "\n"
-            return result
-
-        # 3. 相似度匹配兜底（阈值设为70%）
+        # 使用RapidFuzz进行快速相似度匹配
         best_match = None
-        best_ratio = 0
-        threshold = 0.7
+        best_score = 0
+
+        # 预处理文本
+        processed_text = fuzzy_utils.default_process(text)
 
         for src, trans in self.translation_dict.items():
-            normalized_src = normalize_for_matching(src)
-            if not normalized_src:
-                continue
-
-            # 计算相似度
-            match_ratio = SequenceMatcher(None, normalized_text, normalized_src).ratio()
-            if match_ratio > best_ratio:
-                best_ratio = match_ratio
+            score = fuzz.ratio(
+                processed_text, fuzzy_utils.default_process(src), processor=None
+            )
+            if score > best_score:
+                best_score = score
                 best_match = trans
+                if score == 100:  # 完全匹配
+                    break
 
-        if best_match and best_ratio >= threshold:
-            # 黄色警告输出
-            print(f"\033[93m警告: 使用相似度匹配 ({best_ratio * 100:.1f}%)\033[0m")
-            print(f"原文: {text[:100]}...")
-            print(f"匹配: {best_match[:100]}...\n")
-            # 保留原始格式
-            result = self._convert_bbcode_to_markdown(best_match)
-            if text.startswith("\n"):
-                result = "\n" + result
-            if text.endswith("\n"):
-                result = result + "\n"
-            return result
+        if best_match and best_score >= self.SIMILARITY_THRESHOLD * 100:
+            if best_score < 100:
+                print(f"\033[93m相似度匹配 ({best_score}%): {text[:50]}...\033[0m")
+            return self._convert_bbcode_to_markdown(best_match)
 
-        # 4. 无法匹配则保留原文（仍转换BBCode）
-        print(f"\033[91m错误: 无法翻译 {text[:100]}...\033[0m")
         return self._convert_bbcode_to_markdown(text)
+
 
     def _get_deprecation_notice(self, elem: ET.Element) -> Optional[str]:
         """获取弃用/实验性说明"""
@@ -281,9 +271,9 @@ class XMLToMarkdownTranslator:
                 else ""
             )
             info = (
-                root.get("deprecated")
+                self._translate_text(root.get("deprecated"))
                 if emoji == "⚠️"
-                else root.get("experimental")
+                else self._translate_text(root.get("experimental"))
                 if emoji == "🔬"
                 else "None"
             )
@@ -495,15 +485,40 @@ class XMLToMarkdownTranslator:
 
                 output_path = output_dir / f"{result['class_name']}.md"
                 output_path.write_text(result["content"], encoding="utf-8")
-                print(f"成功生成: {output_path}")
+                print(f"\n成功生成: {output_path}")
                 self.processed_files.add(result["class_name"])
 
         # 二次处理：根据继承关系组织文件
         self._organize_by_hierarchy(output_dir)
 
 
-if __name__ == "__main__":
-    translator = XMLToMarkdownTranslator(
-        "godot-engine-godot-class-reference-zh_Hans.po"
+def main():
+    parser = argparse.ArgumentParser(
+        description="Godot Engine Class Reference markdown Generator"
     )
-    translator.process_directory("godot/doc/classes", "translated_markdown")
+    parser.add_argument(
+        "-L", "--lang", help="Language code (e.g. zh_Hans) ", default=None
+    )
+    parser.add_argument(
+        "-I", "--input", help="Input directory", default="godot/doc/classes"
+    )
+    parser.add_argument(
+        "-O", "--output", help="Output directory", default="translated_markdown"
+    )
+    parser.add_argument(
+        "-E", "--exclude", nargs="+", help="Exclude file list", default=[]
+    )
+
+    args = parser.parse_args()
+
+    translator = XMLToMarkdownTranslator(lang_code=args.lang)
+    translator.SKIP_FILES = set(args.exclude)
+
+    print(
+        f"Translating to {args.lang if args.lang else 'Processing without translation'}"
+    )
+    translator.process_directory(args.input, args.output)
+
+
+if __name__ == "__main__":
+    main()
