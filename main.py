@@ -9,6 +9,7 @@ import requests
 from rapidfuzz import fuzz, utils as fuzzy_utils
 from bs4 import BeautifulSoup  # 用于处理HTML标签转义
 import argparse
+import os
 
 
 try:
@@ -29,6 +30,7 @@ class XMLToMarkdownTranslator:
         "version": "*版本: {version}*  \n",
         "brief_description": "\n## 简要描述\n\n{content}\n",
         "description": "\n## 详细描述\n\n{content}\n",
+        "brief_description_2": "##\s*简要描述",
         "tutorials": "\n## 教程\n",
         "tutorial_item": "- [{title}]({url})",
         "members": "\n## 成员变量\n",
@@ -491,6 +493,58 @@ class XMLToMarkdownTranslator:
         # 二次处理：根据继承关系组织文件
         self._organize_by_hierarchy(output_dir)
 
+def generate_context_with_descriptions(self: XMLToMarkdownTranslator,directory):
+    output_lines = []
+    
+    def process_directory(path, prefix=''):
+        entries = sorted(os.listdir(path))
+        for i, entry in enumerate(entries):
+            full_path = os.path.join(path, entry)
+            is_last = i == len(entries) - 1
+            
+            if os.path.isdir(full_path):
+                line = prefix + ('└── ' if is_last else '├─ ') + entry
+                output_lines.append(line)
+                new_prefix = prefix + (' ' if is_last else '│ ')
+                process_directory(full_path, new_prefix)
+            else:
+                line = prefix + ('└── ' if is_last else '├─ ') + entry
+                output_lines.append(line)
+                
+                # Check for corresponding .md file
+                if entry.lower().endswith('.md'):
+                    md_path = full_path
+                else:
+                    md_path = os.path.splitext(full_path)[0] + '.md'
+                
+                description = ''
+                if os.path.exists(md_path):
+                    with open(md_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        # Find the "## 简要描述" section
+                        match = re.search(XMLToMarkdownTranslator._localize(self=self,key='brief_description_2')+r'\s*\n+(.*?)(?=\n|\Z)', content, re.DOTALL)
+                        if match:
+                            description = match.group(1).strip()
+                            # Clean up the description
+                            description = re.sub(r'\s+', ' ', description)  # Replace multiple spaces/newlines
+                            description = description[:18]+"..." if len(description) > 18 else description  # Limit to 18 characters
+                
+                if description:
+                    output_lines[-1]=output_lines[-1]+': '+description
+    
+    output_lines.append('.')
+    process_directory(directory)
+    
+    # Write to context.txt
+    with open(os.path.join(directory, 'context.txt'), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(output_lines))
+    
+    output_lines.append('.')
+    process_directory(directory)
+    
+    # Write to context.txt
+    with open(os.path.join(directory, 'context.txt'), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(output_lines))
 
 def main():
     parser = argparse.ArgumentParser(
@@ -518,6 +572,9 @@ def main():
         f"Translating to {args.lang if args.lang else 'Processing without translation'}"
     )
     translator.process_directory(args.input, args.output)
+    
+    # 生成目录结构
+    generate_context_with_descriptions(translator, args.output)
 
 
 if __name__ == "__main__":
